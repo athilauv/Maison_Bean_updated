@@ -22,13 +22,14 @@ public static class DependencyInjection
             options.UseSqlServer(
                 configuration.GetConnectionString("DefaultConnection")));
 
-        services.AddIdentity<AppUser, IdentityRole<int>>(options =>
-        {
+        services.AddIdentityCore<AppUser>(options =>
+            {
             options.Password.RequiredLength = 6;
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequireUppercase = false;
             options.Password.RequireDigit = false;
         })
+        .AddRoles<IdentityRole<int>>()
         .AddEntityFrameworkStores<AppDbContext>()
         .AddDefaultTokenProviders();
         services.AddHttpContextAccessor();

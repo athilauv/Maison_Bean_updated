@@ -32,306 +32,150 @@ using MaisonBean.Infrastructure.Configurations;
 using MaisonBean.Infrastructure.Services;
 using System.Threading.RateLimiting;
 
-var builder =
-    WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// ======================================================
+builder.Services.AddInfrastructure(builder.Configuration);
+
 // INFRASTRUCTURE
-// ======================================================
-
-builder.Services.AddInfrastructure(
-    builder.Configuration
-);
-
-// ======================================================
+builder.Services.AddInfrastructure(builder.Configuration );
 // MEDIATR
-// ======================================================
-
 builder.Services.AddMediatR(cfg =>
-    cfg.RegisterServicesFromAssembly(
-        typeof(PlaceOrderHandler).Assembly
-    )
-);
-
-// ======================================================
+    cfg.RegisterServicesFromAssembly(typeof(PlaceOrderHandler).Assembly) );
 // OPENAI
-// ======================================================
-
 builder.Services.Configure<OpenAIOptions>(
-    builder.Configuration.GetSection(
-        "OpenAI"
-    )
-);
-
+    builder.Configuration.GetSection("OpenAI"));
 builder.Services.AddHttpClient();
-
-// ======================================================
 // CLOUDINARY
-// ======================================================
-
 builder.Services.Configure<CloudinarySettings>(
-    builder.Configuration.GetSection(
-        "CloudinarySettings"
-    )
-);
-
-builder.Services.AddScoped<
-    IImageService,
-    CloudinaryService>();
-
-// ======================================================
+    builder.Configuration.GetSection( "CloudinarySettings") );
+builder.Services.AddScoped<IImageService, CloudinaryService>();
 // JWT SETTINGS
-// ======================================================
-
-var jwtSettings =
-    builder.Configuration
-        .GetSection("JwtSettings")
-        .Get<JwtSettings>()!;
-
-JwtSecurityTokenHandler
-    .DefaultInboundClaimTypeMap
-    .Clear();
-
-// ======================================================
+var jwtSettings = builder.Configuration .GetSection("JwtSettings").Get<JwtSettings>()!;
+JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 // AUTHENTICATION
-// ======================================================
-
-builder.Services
-
-    .AddAuthentication(options =>
+builder.Services.AddAuthentication(options =>
     {
-        options.DefaultAuthenticateScheme =
-            JwtBearerDefaults.AuthenticationScheme;
-
-        options.DefaultChallengeScheme =
-            JwtBearerDefaults.AuthenticationScheme;
-
-        options.DefaultScheme =
-            JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
     })
-
     .AddJwtBearer(options =>
     {
-        options.TokenValidationParameters =
-            new TokenValidationParameters
+        options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
-
                 ValidateAudience = true,
-
                 ValidateLifetime = true,
-
                 ValidateIssuerSigningKey = true,
-
-                ValidIssuer =
-                    jwtSettings.Issuer,
-
-                ValidAudience =
-                    jwtSettings.Audience,
-
-                IssuerSigningKey =
-                    new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(
-                            jwtSettings.SecretKey
-                        )
-                    ),
-
-                // =====================================
-                // CUSTOM CLAIM TYPES
-                // =====================================
-
+                ValidIssuer = jwtSettings.Issuer,
+                ValidAudience = jwtSettings.Audience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
                 RoleClaimType = "ROLE",
-
                 NameClaimType = "id",
-
-                ClockSkew =
-                    TimeSpan.Zero
+                ClockSkew = TimeSpan.Zero
             };
 
-        options.Events =
-            new JwtBearerEvents
+        options.Events = new JwtBearerEvents
             {
-                OnMessageReceived =
-                    context =>
+                OnMessageReceived = context =>
                     {
-                        context.Token =
-                            context.Request
-                                .Cookies["accessToken"];
-
+                        context.Token = context.Request.Cookies["accessToken"];
                         return Task.CompletedTask;
                     },
 
-                OnChallenge =
-                    context =>
+                OnChallenge = context =>
                     {
                         context.HandleResponse();
-
-                        context.Response.StatusCode =
-                            401;
-
+                        context.Response.StatusCode = 401;
                         return Task.CompletedTask;
                     },
 
-                OnForbidden =
-                    context =>
+                OnForbidden = context =>
                     {
-                        context.Response.StatusCode =
-                            403;
-
+                        context.Response.StatusCode = 403;
                         return Task.CompletedTask;
                     }
             };
     });
 
-// ======================================================
 // AUTHORIZATION
-// ======================================================
-
 builder.Services.AddAuthorization();
 
 
-// ======================================================
 // RATE LIMITING
-// ======================================================
-
 builder.Services.AddRateLimiter(options =>
 {
-    // =========================================
     // GLOBAL LIMITER
-    // =========================================
-
-    options.GlobalLimiter =
-        PartitionedRateLimiter.Create<HttpContext, string>(
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
             context =>
             {
-                var ip =
-                    context.Connection
-                        .RemoteIpAddress?
-                        .ToString()
-
-                    ?? "unknown";
-
-                return RateLimitPartition
-                    .GetFixedWindowLimiter(
-                        partitionKey: ip,
+                var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(partitionKey: ip,
 
                         factory: _ =>
                             new FixedWindowRateLimiterOptions
                             {
                                 PermitLimit = 100,
-
-                                Window =
-                                    TimeSpan.FromMinutes(1),
-
-                                QueueProcessingOrder =
-                                    QueueProcessingOrder
-                                        .OldestFirst,
-
+                                Window = TimeSpan.FromMinutes(1),
+                                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                                 QueueLimit = 2
                             });
             });
 
-    // =========================================
     // LOGIN POLICY
-    // =========================================
-
-    options.AddFixedWindowLimiter(
-        "login",
-        limiterOptions =>
+    options.AddFixedWindowLimiter("login", limiterOptions =>
         {
             limiterOptions.PermitLimit = 5;
-
-            limiterOptions.Window =
-                TimeSpan.FromMinutes(1);
-
+            limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });
 
-    // =========================================
-    // CART POLICY
-    // =========================================
-
-    options.AddFixedWindowLimiter(
-        "cart",
-        limiterOptions =>
+     // CART POLICY
+    options.AddFixedWindowLimiter("cart", limiterOptions =>
         {
             limiterOptions.PermitLimit = 30;
-
-            limiterOptions.Window =
-                TimeSpan.FromMinutes(1);
-
+            limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });
 
-    // =========================================
-    // WISHLIST POLICY
-    // =========================================
-
-    options.AddFixedWindowLimiter(
-        "wishlist",
-        limiterOptions =>
+     // WISHLIST POLICY
+    options.AddFixedWindowLimiter("wishlist", limiterOptions =>
         {
             limiterOptions.PermitLimit = 20;
-
-            limiterOptions.Window =
-                TimeSpan.FromMinutes(1);
-
+            limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });
 
-    // =========================================
-    // CHECKOUT POLICY
-    // =========================================
-
-    options.AddFixedWindowLimiter(
-        "checkout",
+     // CHECKOUT POLICY
+    options.AddFixedWindowLimiter("checkout",
         limiterOptions =>
         {
             limiterOptions.PermitLimit = 10;
-
-            limiterOptions.Window =
-                TimeSpan.FromMinutes(1);
-
+            limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });
 
-    // =========================================
     // AI POLICY
-    // =========================================
-
-    options.AddFixedWindowLimiter(
-        "ai",
+    options.AddFixedWindowLimiter("ai",
         limiterOptions =>
         {
             limiterOptions.PermitLimit = 15;
-
-            limiterOptions.Window =
-                TimeSpan.FromMinutes(1);
-
+            limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });
 
-    // =========================================
     // RESPONSE
-    // =========================================
-
-    options.OnRejected = async (
-        context,
-        token) =>
+    options.OnRejected = async (context, token) =>
     {
-        context.HttpContext.Response.StatusCode =
-            StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/json";
 
-        context.HttpContext.Response.ContentType =
-            "application/json";
-
-        await context.HttpContext.Response
-            .WriteAsJsonAsync(
+        await context.HttpContext.Response.WriteAsJsonAsync(
                 new
                 {
                     success = false,
-                    message =
-                        "Too many requests. Please try again later."
+                    message = "Too many requests. Please try again later."
                 },
                 cancellationToken: token
             );
@@ -359,29 +203,18 @@ builder.Services.AddRateLimiter(options =>
 //    });
 
 
-builder.Services.Configure<
-    CookiePolicyOptions>(options =>
+builder.Services.Configure<CookiePolicyOptions>(options =>
     {
-        options.HttpOnly =
-            HttpOnlyPolicy.Always;
-
-        options.MinimumSameSitePolicy =
-            SameSiteMode.None;
-
-        options.Secure =
-            CookieSecurePolicy.Always;
+        options.HttpOnly = HttpOnlyPolicy.Always;
+        options.MinimumSameSitePolicy = SameSiteMode.None;
+        options.Secure = CookieSecurePolicy.Always;
     });
 
 
-// ======================================================
 // CORS
-// ======================================================
-
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy(
-    "AllowFrontend",
-    policy => {
+    options.AddPolicy("AllowFrontend", policy => {
         policy
         .WithOrigins("http://localhost:5173",
         "https://localhost:5173")
@@ -391,239 +224,94 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ======================================================
 // CONTROLLERS
-// ======================================================
-
-builder.Services
-
-    .AddControllers()
-
-    .AddJsonOptions(options =>
+builder.Services.AddControllers().AddJsonOptions(options =>
     {
-        // =====================================
-        // ENUM AS STRING
-        // =====================================
-
         options
             .JsonSerializerOptions
             .Converters
-            .Add(
-                new System.Text.Json
-                    .Serialization
-                    .JsonStringEnumConverter()
-            );
-
-        // =====================================
-        // FIX JSON CYCLE
-        // =====================================
+            .Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 
         options
             .JsonSerializerOptions
-            .ReferenceHandler =
-                System.Text.Json
-                    .Serialization
-                    .ReferenceHandler
-                    .IgnoreCycles;
+            .ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
 
-builder.Services
-    .AddEndpointsApiExplorer();
-
-// ======================================================
+builder.Services.AddEndpointsApiExplorer();
 // REPOSITORIES
-// ======================================================
-
-builder.Services.AddScoped<
-    IOrderRepository,
-    OrderRepository>();
-
-builder.Services.AddScoped<
-    IWishlistRepository,
-    WishlistRepository>();
-
-builder.Services.AddScoped<
-    IAddressRepository,
-    AddressRepository>();
-
-builder.Services.AddScoped<
-    IUserRepository,
-    UserRepository>();
-
-builder.Services.AddScoped<
-    IUserService,
-    UserService>();
-
-// ======================================================
+builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<IWishlistRepository, WishlistRepository>();
+builder.Services.AddScoped<IAddressRepository, AddressRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IUserService, UserService>();
 // AI SERVICES
-// ======================================================
-
-builder.Services.AddHttpClient<
-    IAIChatService,
-    OllamaChatService>();
-
-builder.Services.AddScoped<
-    IEmbeddingService,
-    OpenAIEmbeddingService>();
-
-builder.Services.AddScoped<
-    IVectorSearchService,
-    VectorSearchService>();
-
-builder.Services.AddScoped<
-    IConversationService,
-    ConversationService>();
-
-builder.Services.AddScoped<
-    IPromptService,
-    PromptBuilderService>();
-
-//==========================
-
+builder.Services.AddHttpClient<IAIChatService, OllamaChatService>();
+builder.Services.AddScoped<IEmbeddingService, OpenAIEmbeddingService>();
+builder.Services.AddScoped<IVectorSearchService, VectorSearchService>();
+builder.Services.AddScoped<IConversationService, ConversationService>();
+builder.Services.AddScoped<IPromptService, PromptBuilderService>();
 builder.Services.AddHttpContextAccessor();
-
-builder.Services.AddScoped<
-    ICurrentUserService,
-    CurrentUserService>();
-
-// ======================================================
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 // PAYMENT
-// ======================================================
-
-builder.Services.AddScoped<
-    IPaymentService,
-    RazorpayService>();
-
-// ======================================================
+builder.Services.AddScoped<IPaymentService, RazorpayService>();
 // SWAGGER
-// ======================================================
-
 builder.Services.AddSwaggerGen(c =>
 {
     c.UseInlineDefinitionsForEnums();
-
     c.MapType<OrderStatus>(() =>
-        new Microsoft.OpenApi.Models
-            .OpenApiSchema
+        new Microsoft.OpenApi.Models.OpenApiSchema
         {
             Type = "string",
-
-            Enum =
-                Enum.GetNames(
-                    typeof(OrderStatus)
-                )
-                .Select(x =>
-                    (Microsoft.OpenApi.Any
-                        .IOpenApiAny)
-
-                    new Microsoft.OpenApi.Any
-                        .OpenApiString(x)
-                )
-                .ToList()
+            Enum = Enum.GetNames(typeof(OrderStatus))
+                .Select(x => (Microsoft.OpenApi.Any.IOpenApiAny)
+                    new Microsoft.OpenApi.Any.OpenApiString(x)).ToList()
         });
 });
 
-// ======================================================
 // BUILD APP
-// ======================================================
-
 var app = builder.Build();
 
-// ======================================================
 // SEED ADMIN
-// ======================================================
-
-using (var scope =
-    app.Services.CreateScope())
+using (var scope = app.Services.CreateScope())
 {
-    var services =
-        scope.ServiceProvider;
-
-    var userManager =
-        services.GetRequiredService<
-            UserManager<AppUser>>();
-
-    var roleManager =
-        services.GetRequiredService<
-            RoleManager<
-                IdentityRole<int>>>();
-
-    await DbSeeder.SeedAdminAsync(
-        userManager,
-        roleManager
-    );
+    var services = scope.ServiceProvider;
+    var userManager = services.GetRequiredService<UserManager<AppUser>>();
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole<int>>>();
+    await DbSeeder.SeedAdminAsync(userManager, roleManager);
 }
 
-// ======================================================
 // CREATE ROLES
-// ======================================================
-
-using (var scope =
-    app.Services.CreateScope())
+using (var scope = app.Services.CreateScope())
 {
-    var roleManager =
-        scope.ServiceProvider
-            .GetRequiredService<
-                RoleManager<
-                    IdentityRole<int>>>();
+    var roleManager = scope.ServiceProvider
+        .GetRequiredService<RoleManager<IdentityRole<int>>>();
 
-    string[] roles =
-    {
-        "ADMIN",
-        "CUSTOMER"
-    };
-
+    string[] roles = { "ADMIN", "CUSTOMER" };
     foreach (var role in roles)
     {
-        if (!await roleManager
-            .RoleExistsAsync(role))
+        if (!await roleManager.RoleExistsAsync(role))
         {
-            await roleManager
-                .CreateAsync(
-                    new IdentityRole<int>(
-                        role
-                    )
-                );
+            await roleManager.CreateAsync(new IdentityRole<int>(role));
         }
     }
 }
 
-// ======================================================
 // MIDDLEWARE
-// ======================================================
-
 app.UseHttpsRedirection();
-
 app.UseMiddleware<IpWhitelistMiddleware>();
-
 app.UseSwagger();
-
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint(
-        "/swagger/v1/swagger.json",
-        "MaisonBean API V1"
-    );
-
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "MaisonBean API V1");
     c.RoutePrefix = "swagger";
 });
 
 app.UseCors("AllowFrontend");
-
 app.UseCookiePolicy();
-
 app.UseAuthentication();
-
 app.UseMiddleware<BlockedUserMiddleware>();
-
 app.UseRateLimiter();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
-// ======================================================
 // RUN
-// ======================================================
-
 app.Run();

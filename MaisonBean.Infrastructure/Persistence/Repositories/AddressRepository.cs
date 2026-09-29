@@ -6,7 +6,6 @@ namespace MaisonBean.Infrastructure.Persistence.Repositories;
 public class AddressRepository : IAddressRepository
 {
     private readonly AppDbContext _context;
-
     public AddressRepository(AppDbContext context)
     {
         _context = context;
@@ -19,8 +18,7 @@ GetByUserIdAsync(int userId, CancellationToken ct)
             .Where(a =>
                 a.UserId == userId &&
                 !a.IsDeleted
-            )
-            .ToListAsync(ct);
+            ).ToListAsync(ct);
     }
 
     public async Task<Address?> GetByIdAsync(int id, CancellationToken ct)
@@ -44,7 +42,6 @@ GetByUserIdAsync(int userId, CancellationToken ct)
     public void Delete(Address address)
     {
         address.SoftDelete();
-
         _context.Addresses.Update(address);
     }
 }
