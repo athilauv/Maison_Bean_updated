@@ -1,9 +1,10 @@
 ﻿using MaisonBean.Application.Wishlist.DTOs;
-using System;
+using MaisonBean.Domain.Entities;
+
+namespace MaisonBean.Application.Interfaces;
 
 public interface IWishlistRepository
 {
-
     Task<WishlistItem?> GetByIdAsync(int id, CancellationToken ct);
     Task AddAsync(WishlistItem item, CancellationToken ct);
     void Remove(WishlistItem item);
