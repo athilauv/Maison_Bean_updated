@@ -32,13 +32,12 @@ using MaisonBean.Infrastructure.Configurations;
 using MaisonBean.Infrastructure.Services;
 using System.Threading.RateLimiting;
 
+// INFRASTRUCTURE
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// INFRASTRUCTURE
-builder.Services.AddInfrastructure(builder.Configuration );
 // MEDIATR
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(PlaceOrderHandler).Assembly) );
@@ -215,8 +214,7 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy => {
-        policy
-        .WithOrigins("http://localhost:5173",
+        policy .WithOrigins("http://localhost:5173",
         "https://localhost:5173")
         .AllowAnyHeader()
         .AllowAnyMethod()

@@ -17,10 +17,7 @@ public class WishlistController : ControllerBase
     private readonly IUnitOfWork _uow;
     private readonly IMediator _mediator;
 
-    public WishlistController(
-        IWishlistRepository wishlist,
-        IUnitOfWork uow,
-        IMediator mediator)
+    public WishlistController(IWishlistRepository wishlist, IUnitOfWork uow, IMediator mediator)
     {
         _wishlist = wishlist;
         _uow = uow;
@@ -36,15 +33,13 @@ public class WishlistController : ControllerBase
             return Unauthorized(); 
         }
         var items = await _wishlist.GetWishlistWithProducts(userId, ct);
-
         return Ok(items);
     }
 
     // Toggle
     [HttpPost("toggle")]
     public async Task<IActionResult> Toggle(
-        [FromBody] ToggleWishlistCommand cmd,
-        CancellationToken ct)
+        [FromBody] ToggleWishlistCommand cmd, CancellationToken ct)
     {
         var userIdClaim = User.FindFirstValue("id");
         if (!int.TryParse(userIdClaim, out var userId)) 
@@ -58,27 +53,15 @@ public class WishlistController : ControllerBase
 
 
     [HttpDelete("remove/{id}")]
-    public async Task<IActionResult> Remove(
-    int id,
-    CancellationToken ct
-)
+    public async Task<IActionResult> Remove(int id, CancellationToken ct )
     {
-        var userIdClaim =
-            User.FindFirstValue("id");
-
-        if (!int.TryParse(
-            userIdClaim,
-            out var userId))
+        var userIdClaim = User.FindFirstValue("id");
+        if (!int.TryParse(userIdClaim, out var userId))
         {
             return Unauthorized();
         }
 
-        var item =
-            await _wishlist.GetByIdAsync(
-                id,
-                ct
-            );
-
+        var item = await _wishlist.GetByIdAsync(id, ct);
         if (item == null)
             return NotFound();
 
@@ -86,9 +69,7 @@ public class WishlistController : ControllerBase
             return Forbid();
 
         _wishlist.Remove(item);
-
         await _uow.SaveChangesAsync(ct);
-
         return Ok(new
         {
             message = "Removed"
@@ -105,7 +86,15 @@ public class WishlistController : ControllerBase
             return Unauthorized(); 
         }
         var items = await _wishlist.GetByUserIdAsync(userId, ct);
+        foreach (var item in items)
+        {
+            _wishlist.Remove(item);
+        }
 
-        return Ok(new { message = "Wishlist cleared" });
+        await _uow.SaveChangesAsync(ct);
+        return Ok(new
+        {
+            message = "Wishlist cleared"
+        });
     }
 }
